@@ -47,6 +47,67 @@ class DBAtomicFlushTest : public DBFlushTest,
   DBAtomicFlushTest() : DBFlushTest() {}
 };
 
+// This test is used for test the difference of performance while building table
+// in Flush().
+//
+// This test currently run with different value size: 10 , 100, 1000.
+TEST_F(DBFlushTest, TestPerformance) {
+  Options options;
+  options.create_if_missing = true;
+  options.disable_auto_compactions = true;
+  options.level0_stop_writes_trigger = 1 << 10;
+  options.level0_slowdown_writes_trigger = 1 << 10;
+  options.max_background_flushes = 1;
+  options.env = MockEnv::Create(Env::Default());
+  options.comparator = ROCKSDB_NAMESPACE::test::ComparatorWithU64Ts();
+  Random* r = Random::GetTLSInstance();
+  int sample_count = 10;
+  std::vector<int> test_value_size = {10, 100, 1000};
+  std::vector<bool> need_collect_ts_v = {true, false};
+  SyncPoint::GetInstance()->EnableProcessing();
+  for (auto need_c : need_collect_ts_v) {
+    if (!need_c) {
+      SyncPoint::GetInstance()->SetCallBack(
+          "BlockBasedTableBuilder::NeedTsCollector", [&](void* arg) {
+            bool* need_collector = static_cast<bool*>(arg);
+            *need_collector = false;
+          });
+    }
+    for (auto v_size : test_value_size) {
+      uint64_t total_time = 0;
+      for (int i = 0; i < sample_count; i++) {
+        DestroyAndReopen(options);
+        int current_size = 0;
+        WriteOptions write_opts;
+        char buf[sizeof(uint64_t)];
+        int expect_mem_size = 32 * 1024 * 1024;
+        while (current_size < expect_mem_size) {
+          EncodeFixed64(buf, r->Next64());
+          Slice ts(buf, sizeof(uint64_t));
+          write_opts.timestamp = &ts;
+          ASSERT_OK(db_->Put(write_opts, r->RandomString(10),
+                             r->RandomString(v_size)));
+          current_size = current_size + 10 /* test_key_size*/ +
+                         8 /* lsn size */ + 8 /* ts size */ + v_size;
+        }
+        StopWatchNano timer(SystemClock::Default().get(), true);
+        ASSERT_OK(db_->Flush(FlushOptions()));
+        auto elapsed_time = static_cast<double>(timer.ElapsedNanos() / 1000);
+        total_time += elapsed_time;
+      }
+
+      std::cout << "\nCurrent ts collect enabled: "
+                << (need_c ? "TRUE" : "FALSE")
+                << "\nInternal Key size: " << 10 + 8 + 8 + v_size
+                << "\nsample iteration: " << sample_count
+                << "\nTotally cost time micro secs: " << total_time << "\n";
+    }
+  }
+  SyncPoint::GetInstance()->DisableProcessing();
+  Destroy(options);
+  delete options.env;
+}
+
 // We had issue when two background threads trying to flush at the same time,
 // only one of them get committed. The test verifies the issue is fixed.
 TEST_F(DBFlushTest, FlushWhileWritingManifest) {

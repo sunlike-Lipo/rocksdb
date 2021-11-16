@@ -517,8 +517,13 @@ struct BlockBasedTableBuilder::Rep {
     const Comparator* ucmp = tbo.internal_comparator.user_comparator();
     assert(ucmp);
     if (ucmp->timestamp_size() > 0) {
-      table_properties_collectors.emplace_back(
-          new TimestampTablePropertiesCollector(ucmp));
+      bool need_ts_collector = true;
+      TEST_SYNC_POINT_CALLBACK("BlockBasedTableBuilder::NeedTsCollector",
+                               &need_ts_collector);
+      if (need_ts_collector) {
+        table_properties_collectors.emplace_back(
+            new TimestampTablePropertiesCollector(ucmp));
+      }
     }
     if (table_options.verify_compression) {
       for (uint32_t i = 0; i < compression_opts.parallel_threads; i++) {
