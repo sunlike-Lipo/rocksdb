@@ -136,7 +136,10 @@ class Comparator : public Customizable {
     return 0 ==
            CompareWithoutTimestamp(a, /*a_has_ts=*/true, b, /*b_has_ts=*/true);
   }
-
+  
+  virtual bool Enabled() const {
+    return true;
+  }
  private:
   size_t timestamp_size_;
 };

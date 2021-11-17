@@ -516,7 +516,7 @@ struct BlockBasedTableBuilder::Rep {
             moptions.prefix_extractor != nullptr));
     const Comparator* ucmp = tbo.internal_comparator.user_comparator();
     assert(ucmp);
-    if (ucmp->timestamp_size() > 0) {
+    if (ucmp->timestamp_size() > 0 && ucmp->Enabled()) {
       table_properties_collectors.emplace_back(
           new TimestampTablePropertiesCollector(ucmp));
     }
