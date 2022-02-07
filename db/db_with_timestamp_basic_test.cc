@@ -286,12 +286,17 @@ TEST_F(DBBasicTestWithTimestamp, TrimHistoryTest) {
   ASSERT_OK(db_->Put(wopts, "k1", "v3"));
 
   ts_str = Timestamp(3, 0);
-  ts = ts_str;
   CompactRangeOptions cro;
-  cro.trim_ts = &ts;
   ASSERT_OK(Flush());
-  ASSERT_OK(db_->CompactRange(cro, nullptr, nullptr));
+  Close();
 
+  ColumnFamilyOptions cf_options(options);
+  std::vector<ColumnFamilyDescriptor> column_families;
+  column_families.push_back(
+      ColumnFamilyDescriptor(kDefaultColumnFamilyName, cf_options));
+  DBOptions db_options(options);
+  ASSERT_OK(DB::OpenAndTrimHistory(db_options, dbname_, column_families,
+            &handles_, &db_, ts_str));
   ReadOptions ropts;
   ts_str = Timestamp(2, 0);
   ts = ts_str;
