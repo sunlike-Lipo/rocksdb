@@ -716,21 +716,16 @@ TEST_F(DBBasicTestWithTimestamp, TrimHistoryTest) {
   std::string ts_str = Timestamp(2, 0);
   WriteOptions wopts;
   Slice ts = ts_str;
-  wopts.timestamp = &ts;
-  ASSERT_OK(db_->Put(wopts, "k1", "v1"));
+  ASSERT_OK(db_->Put(wopts, "k1", ts, "v1"));
   ts_str = Timestamp(4, 0);
   ts = ts_str;
-  wopts.timestamp = &ts;
-  ASSERT_OK(db_->Put(wopts, "k1", "v2"));
+  ASSERT_OK(db_->Put(wopts, "k1", ts, "v2"));
   ts_str = Timestamp(5, 0);
   ts = ts_str;
-  wopts.timestamp = &ts;
-  ASSERT_OK(db_->Delete(wopts, "k1"));
+  ASSERT_OK(db_->Delete(wopts, "k1", ts));
   ts_str = Timestamp(6, 0);
   ts = ts_str;
-  wopts.timestamp = &ts;
-  ASSERT_OK(db_->Put(wopts, "k1", "v3"));
-  ts_str = Timestamp(3, 0);
+  ASSERT_OK(db_->Put(wopts, "k1", ts, "v3"));
   ASSERT_OK(Flush());
   Close();
 
@@ -739,8 +734,9 @@ TEST_F(DBBasicTestWithTimestamp, TrimHistoryTest) {
   column_families.push_back(
       ColumnFamilyDescriptor(kDefaultColumnFamilyName, cf_options));
   DBOptions db_options(options);
-  // Trim data whose version is newer than Timestamp(3, 0), which means 
+  // Trim data whose version is newer than Timestamp(3, 0), which means
   // only (k1, v1) should survive after call DB::OpenAndTrimHistory.
+  ts_str = Timestamp(3, 0);
   ASSERT_OK(DB::OpenAndTrimHistory(db_options, dbname_, column_families,
                                    &handles_, &db_, ts_str));
   ReadOptions ropts;
@@ -761,7 +757,6 @@ TEST_F(DBBasicTestWithTimestamp, TrimHistoryTest) {
   ASSERT_EQ("v1", value);
   Close();
 }
-
 
 #ifndef ROCKSDB_LITE
 TEST_F(DBBasicTestWithTimestamp, GetTimestampTableProperties) {
