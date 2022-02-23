@@ -1552,10 +1552,10 @@ Status DB::OpenAndTrimHistory(
     const DBOptions& db_options, const std::string& dbname,
     const std::vector<ColumnFamilyDescriptor>& column_families,
     std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
-    const std::string trim_ts) {
+    std::string trim_ts) {
   assert(dbptr != nullptr);
   assert(handles != nullptr);
-  auto validateOptions = [&] {
+  auto validate_options = [&db_options] {
     if (db_options.avoid_flush_during_recovery) {
       return Status::InvalidArgument(
           "avoid_flush_during_recovery incompatible with "
@@ -1563,7 +1563,7 @@ Status DB::OpenAndTrimHistory(
     }
     return Status::OK();
   };
-  auto s = validateOptions();
+  auto s = validate_options();
   if (!s.ok()) {
     return s;
   }
@@ -1573,14 +1573,7 @@ Status DB::OpenAndTrimHistory(
   if (!s.ok()) {
     return s;
   }
-  auto cleanOp = [&] {
-    for (auto handle : *handles) {
-      auto temp_s = db->DestroyColumnFamilyHandle(handle);
-      assert(temp_s.ok());
-    }
-    handles->clear();
-    delete db;
-  };
+  assert(db);
   CompactRangeOptions options;
   options.bottommost_level_compaction =
       BottommostLevelCompaction::kForceOptimized;
@@ -1600,8 +1593,16 @@ Status DB::OpenAndTrimHistory(
       }
     }
   }
+  auto clean_op = [&handles, &db] {
+    for (auto handle : *handles) {
+      auto temp_s = db->DestroyColumnFamilyHandle(handle);
+      assert(temp_s.ok());
+    }
+    handles->clear();
+    delete db;
+  };
   if (!s.ok()) {
-    cleanOp();
+    clean_op();
     return s;
   }
 
